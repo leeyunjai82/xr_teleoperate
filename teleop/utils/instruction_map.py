@@ -20,7 +20,6 @@ class LowPassFilter:
 class ControlDataMapper:
     """
     控制数据映射器
-    将原始输入数据（范围 -32768 到 32768）映射到控制参数
     """
     def __init__(self):
         # 速度滤波器
@@ -93,15 +92,15 @@ class ControlDataMapper:
     
     def _map_forward_velocity(self, value):
         """映射前进速度"""
-        return self._smooth_map(value, -0.3, 0.3)
+        return self._smooth_map(value, -0.2, 0.2)
     
     def _map_lateral_velocity(self, value):
         """映射横向速度"""
-        return self._smooth_map(value, -0.3, 0.3)
+        return self._smooth_map(value, -0.2, 0.2)
     
     def _map_yaw_velocity(self, value):
         """映射偏航速度"""
-        return self._smooth_map(value, -1.57, 1.57)
+        return self._smooth_map(value, -1.0, 1.0)
     
     def _smooth_map(self, value, out_min, out_max, deadzone=0.05):
         """
