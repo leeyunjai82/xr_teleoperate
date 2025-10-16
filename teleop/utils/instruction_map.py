@@ -17,8 +17,8 @@ class HandleInstruction:
         elif self.control_device == "other" and self.tv_wrapper is not None:
             lx = -self.tv_wrapper.get_motion_state_data().tele_state.left_thumbstick_value[1]
             ly = -self.tv_wrapper.get_motion_state_data().tele_state.left_thumbstick_value[0]
-            rx = -self.tv_wrapper.get_motion_state_data().tele_state.right_thumbstick_value[1]
-            ry = -self.tv_wrapper.get_motion_state_data().tele_state.right_thumbstick_value[0]
+            rx = -self.tv_wrapper.get_motion_state_data().tele_state.right_thumbstick_value[0]
+            ry = -self.tv_wrapper.get_motion_state_data().tele_state.right_thumbstick_value[1]
             rbutton_A = self.tv_wrapper.get_motion_state_data().tele_state.right_aButton
             rbutton_B = self.tv_wrapper.get_motion_state_data().tele_state.right_bButton
         else:
