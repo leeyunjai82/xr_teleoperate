@@ -1,6 +1,35 @@
 import numpy as np
 
 
+class HandleInstruction:
+    def __init__(self,control_device,tv_wrapper,mobile_ctrl):
+        self.control_device = control_device
+        self.tv_wrapper = tv_wrapper
+        self.mobile_ctrl = mobile_ctrl
+    def get_instruction(self):
+        if self.control_device == "unitree_handle" and self.mobile_ctrl is not None:
+            lx = self.mobile_ctrl.unitree_handle_state_array_out[0]
+            ly = -self.mobile_ctrl.unitree_handle_state_array_out[1]
+            rx = -self.mobile_ctrl.unitree_handle_state_array_out[2]
+            ry = -self.mobile_ctrl.unitree_handle_state_array_out[3]
+            rbutton_A = True if int(self.mobile_ctrl.unitree_handle_state_array_out[4]) == 256 else False
+            rbutton_B = True if int(self.mobile_ctrl.unitree_handle_state_array_out[4]) == 512 else False
+        elif self.control_device == "other" and self.tv_wrapper is not None:
+            lx = -self.tv_wrapper.get_motion_state_data().tele_state.left_thumbstick_value[1]
+            ly = -self.tv_wrapper.get_motion_state_data().tele_state.left_thumbstick_value[0]
+            rx = -self.tv_wrapper.get_motion_state_data().tele_state.right_thumbstick_value[1]
+            ry = -self.tv_wrapper.get_motion_state_data().tele_state.right_thumbstick_value[0]
+            rbutton_A = self.tv_wrapper.get_motion_state_data().tele_state.right_aButton
+            rbutton_B = self.tv_wrapper.get_motion_state_data().tele_state.right_bButton
+        else:
+            lx = 0
+            ly = 0
+            rx = 0
+            ry = 0
+            rbutton_A = False
+            rbutton_B = False
+        return {'lx': lx, 'ly': ly, 'rx': rx, 'ry': ry, 'rbutton_A': rbutton_A, 'rbutton_B': rbutton_B}
+
 class LowPassFilter:
     """Low-pass filter for smoothing data"""
     def __init__(self, alpha=0.15):

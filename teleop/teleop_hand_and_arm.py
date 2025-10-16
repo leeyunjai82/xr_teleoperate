@@ -21,7 +21,7 @@ from teleop.robot_control.robot_hand_unitree import Dex3_1_Controller, Dex1_1_Gr
 from teleop.robot_control.robot_hand_inspire import Inspire_Controller
 from teleop.robot_control.robot_hand_brainco import Brainco_Controller
 from teleop.robot_control.mobile_control import G1_Mobile_Lift_Controller
-from teleop.utils.instruction_map import ControlDataMapper
+from teleop.utils.instruction_map import ControlDataMapper, HandleInstruction
 from teleop.image_server.image_client import ImageClient
 from teleop.utils.episode_writer import EpisodeWriter
 from teleop.utils.ipc import IPC_Server
@@ -94,7 +94,7 @@ if __name__ == '__main__':
     parser.add_argument('--ipc', action = 'store_true', help = 'Enable IPC server to handle input; otherwise enable sshkeyboard')
     parser.add_argument('--record', action = 'store_true', help = 'Enable data recording')
     parser.add_argument('--task-dir', type = str, default = './utils/data/', help = 'path to save data')
-    parser.add_argument('--task-name', type = str, default = 'pick cube', help = 'task name for recording')
+    parser.add_argument('--task-name', type = str, default = 'pick_cube', help = 'task name for recording')
     parser.add_argument('--task-desc', type = str, default = 'e.g. pick the red cube on the table.', help = 'task goal for recording')
 
     args = parser.parse_args()
@@ -229,7 +229,7 @@ if __name__ == '__main__':
                 mobile_ctrl = G1_Mobile_Lift_Controller(args.base_type, args.control_device, args.use_waist, simulation_mode=args.sim)
         else:
             mobile_ctrl=None
-        
+        handle_instruction = HandleInstruction(args.control_device, tv_wrapper, mobile_ctrl)
         # affinity mode (if you dont know what it is, then you probably don't need it)
         if args.affinity:
             import psutil
@@ -350,32 +350,31 @@ if __name__ == '__main__':
             time_ik_end = time.time()
             logger_mp.debug(f"ik:\t{round(time_ik_end - time_ik_start, 6)}")
             # For mobile base and elevation control
+            height_state = None
+            height_action = [0.0]
+            move_state = None
+            move_action = [0.0, 0.0]
+            waist_state = None
+            waist_action = None
             if args.base_type != "None" and mobile_ctrl != None:
-                if args.control_device == "unitree_handle":
-                    if args.use_waist:
-                        waist_state = arm_ctrl.get_current_waist_q()
-                        rx = mobile_ctrl.unitree_handle_state_array_out[2]
-                        ry = mobile_ctrl.unitree_handle_state_array_out[3]
-                        vel_data = control_data_mapper.update(rx=-rx, ry=-ry, current_waist_yaw=waist_state[0], current_waist_pitch=waist_state[1])
-                        waist_action = np.array([vel_data['waist_yaw_pos']]).tolist()
-                        sol_q = np.concatenate([sol_q, waist_action])
-                else:
-                    lx = -tele_data.tele_state.left_thumbstick_value[1]
-                    ly = -tele_data.tele_state.left_thumbstick_value[0]
-                    rbutton_A = tele_data.tele_state.right_aButton
-                    rbutton_B = tele_data.tele_state.right_bButton
-                    vel_data = control_data_mapper.update(lx=lx, ly=ly,rbutton_A=rbutton_A, rbutton_B=rbutton_B)
-                    mobile_ctrl.g1_height_action_array_in[0] = vel_data['g1_height']  
-                    if args.base_type == "mobile_lift":
-                        mobile_ctrl.g1_move_action_array_in[0] = vel_data['mobile_x_vel']  
-                        mobile_ctrl.g1_move_action_array_in[1] = vel_data['mobile_yaw_vel'] 
-                    if args.use_waist:
-                        waist_state = arm_ctrl.get_current_waist_q()
-                        rx = -tele_data.tele_state.right_thumbstick_value[1]
-                        ry = -tele_data.tele_state.right_thumbstick_value[0]
-                        vel_data = control_data_mapper.update( rx=rx, ry=ry, current_waist_yaw=waist_state[0], current_waist_pitch=waist_state[1])
-                        waist_action = np.array([vel_data['waist_yaw_pos']]).tolist()
-                        sol_q = np.concatenate([sol_q, waist_action])
+                height_state = mobile_ctrl.g1_height_state_array_out
+                handle_instruction_data = handle_instruction.get_instruction()
+                vel_data = control_data_mapper.update(rbutton_A=handle_instruction_data['rbutton_A'], rbutton_B=handle_instruction_data['rbutton_B'])
+                height_action = np.array([vel_data['g1_height']]).tolist()
+                mobile_ctrl.g1_height_action_array_in[0] = height_action[0]  
+                if args.base_type == "mobile_lift":
+                    move_state = mobile_ctrl.g1_move_state_array_out
+                    handle_instruction_data = handle_instruction.get_instruction()
+                    vel_data = control_data_mapper.update(lx=handle_instruction_data['lx'], ly=handle_instruction_data['ly'])
+                    move_action = np.array([vel_data['mobile_x_vel'], vel_data['mobile_yaw_vel']]).tolist()
+                    mobile_ctrl.g1_move_action_array_in[0] = move_action[0]  
+                    mobile_ctrl.g1_move_action_array_in[1] = move_action[1] 
+                if args.use_waist:
+                    waist_state = arm_ctrl.get_current_waist_q()
+                    handle_instruction_data = handle_instruction.get_instruction()
+                    vel_data = control_data_mapper.update( rx=handle_instruction_data['rx'], ry=handle_instruction_data['ry'], current_waist_yaw=waist_state[0], current_waist_pitch=waist_state[1])
+                    waist_action = np.array([vel_data['waist_yaw_pos']]).tolist()
+                    sol_q = np.concatenate([sol_q, waist_action])
             arm_ctrl.ctrl_dual_arm(sol_q, sol_tauff)
 
 
@@ -499,21 +498,15 @@ if __name__ == '__main__':
                         }, 
                     }
                     if args.base_type != "None" and mobile_ctrl != None:
-                        # Read action data (control commands published from other programs)
-                        height_action = mobile_ctrl.g1_height_action_array_out
-                        # Read state data (actual robot state)
-                        height_state = mobile_ctrl.g1_height_state_array_out
-                        states["body"]["y_vel"] = np.array(height_state[1]).tolist(),
-                        states["body"]["height"] =  np.array(height_state[0]).tolist(),  # in meters
-                        actions["body"]["y_vel"] =  np.array(height_action[0]).tolist(),
+                        states["body"]["lift_vel"] = np.array(height_state[1]).tolist(),
+                        states["body"]["lift_height"] =  np.array(height_state[0]).tolist(),  # in meters
+                        actions["body"]["lift_vel"] =  np.array(height_action[0]).tolist(),
                         
                         if args.base_type == "mobile_lift":
-                            move_action = mobile_ctrl.g1_move_action_array_out
-                            move_state = mobile_ctrl.g1_move_state_array_out
-                            states["body"]["x_vel"] =  np.array(move_state[0]).tolist(),
-                            states["body"]["yaw_vel"] =  np.array(move_state[1]).tolist(),
-                            actions["body"]["x_vel"] =  np.array(move_action[0]).tolist(),
-                            actions["body"]["yaw_vel"] =  np.array(move_action[1]).tolist(),
+                            states["body"]["move_x_vel"] =  np.array(move_state[0]).tolist(),
+                            states["body"]["move_yaw_vel"] =  np.array(move_state[1]).tolist(),
+                            actions["body"]["move_x_vel"] =  np.array(move_action[0]).tolist(),
+                            actions["body"]["move_yaw_vel"] =  np.array(move_action[1]).tolist(),
                         if args.use_waist:
                             states["body"]["waist_qpos"] = np.array(waist_state).tolist(),
                             actions["body"]["waist_qpos"] = np.array(waist_action).tolist(),

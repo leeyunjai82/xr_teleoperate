@@ -27,7 +27,7 @@ kTopicMoveAction = "rt/cmd_vel"
 kTopicUnitreeHandle = "rt/wirelesscontroller"
 
 class G1_Mobile_Lift_Controller:
-    def __init__(self, base_type,control_type,use_waist, fps = 30.0, Unit_Test = False, simulation_mode = False, filter_alpha=0.2,):
+    def __init__(self, base_type,control_type, fps = 30.0, Unit_Test = False, simulation_mode = False, filter_alpha=0.2,):
         """
         Initialize G1 mobile base and elevation controller
         
@@ -43,7 +43,6 @@ class G1_Mobile_Lift_Controller:
         self.simulation_mode = simulation_mode
         self.base_type = base_type 
         self.control_type = control_type
-        self.use_waist = use_waist
         # Data reception flags
         self.height_data_received = False
         self.move_data_received = False
@@ -74,8 +73,7 @@ class G1_Mobile_Lift_Controller:
         self.HeightState_subscriber = ChannelSubscriber(kTopicHeightState, Point32_)
         self.HeightState_subscriber.Init()
         # Height action subscriber
-        self.HeightAction_subscriber = ChannelSubscriber(kTopicHeightAction, Point32_)
-        self.HeightAction_subscriber.Init()
+
 
         self.g1_height_msg = geometry_msgs_msg_dds__Point32_()
 
@@ -98,13 +96,7 @@ class G1_Mobile_Lift_Controller:
         self.subscribe_g1_mobilebase_state_thread.daemon = True
         self.subscribe_g1_mobilebase_state_thread.start()
 
-        self.subscribe_g1_height_action_thread = threading.Thread(target=self._subscribe_g1_height_action)
-        self.subscribe_g1_height_action_thread.daemon = True
-        self.subscribe_g1_height_action_thread.start()
-        if self.base_type == "mobile_lift":   
-            self.subscribe_g1_move_action_thread = threading.Thread(target=self._subscribe_g1_move_action)
-            self.subscribe_g1_move_action_thread.daemon = True
-            self.subscribe_g1_move_action_thread.start()
+
 
         while True:
             if self.base_type == "mobile_lift":
@@ -128,21 +120,17 @@ class G1_Mobile_Lift_Controller:
         
         logger_mp.info("[G1_Mobile_Lift_Controller] Subscribe dds ok.")
         # If not using Unitree controller, start control process
-        if self.control_type != "unitree_handle":
-            self.running = True
-            g1_height_control_process = Process(target=self.control_process, args=(self.base_type,))
-
-            g1_height_control_process.daemon = True
-            g1_height_control_process.start()
-        else:
-            if self.use_waist:
-                # 订阅unitree手柄消息
-                self.unitree_handle_state_array_out = Array('d', 5, lock=True)
-                self.UnitreeHandleState_subscriber = ChannelSubscriber(kTopicUnitreeHandle, WirelessController_)
-                self.UnitreeHandleState_subscriber.Init()
-                self.subscribe_unitree_handle_state_thread = threading.Thread(target=self._subscribe_unitree_handle_state)
-                self.subscribe_unitree_handle_state_thread.daemon = True
-                self.subscribe_unitree_handle_state_thread.start()
+        if self.control_type == "unitree_handle":
+            self.unitree_handle_state_array_out = Array('d', 5, lock=True)
+            self.UnitreeHandleState_subscriber = ChannelSubscriber(kTopicUnitreeHandle, WirelessController_)
+            self.UnitreeHandleState_subscriber.Init()
+            self.subscribe_unitree_handle_state_thread = threading.Thread(target=self._subscribe_unitree_handle_state)
+            self.subscribe_unitree_handle_state_thread.daemon = True
+            self.subscribe_unitree_handle_state_thread.start()
+        self.running = True
+        mobile_control_process = Process(target=self.control_process, args=(self.base_type,))
+        mobile_control_process.daemon = True
+        mobile_control_process.start()
 
         logger_mp.info("Initialize G1_Mobile_Lift_Controller OK!\n")
     def _subscribe_unitree_handle_state(self):
@@ -150,8 +138,8 @@ class G1_Mobile_Lift_Controller:
             try:
                 unitree_handle_msg = self.UnitreeHandleState_subscriber.Read()
                 if unitree_handle_msg is not None:
-                    self.unitree_handle_state_array_out[0] = unitree_handle_msg.lx
-                    self.unitree_handle_state_array_out[1] = unitree_handle_msg.ly
+                    self.unitree_handle_state_array_out[1] = unitree_handle_msg.lx
+                    self.unitree_handle_state_array_out[0] = unitree_handle_msg.ly
                     self.unitree_handle_state_array_out[2] = unitree_handle_msg.rx
                     self.unitree_handle_state_array_out[3] = unitree_handle_msg.ry
                     self.unitree_handle_state_array_out[4] = unitree_handle_msg.keys
@@ -159,27 +147,7 @@ class G1_Mobile_Lift_Controller:
                 print(f"[_subscribe_unitree_handle_state] Exception: {e}")
                 time.sleep(0.1)
             time.sleep(0.01)
-    def _subscribe_g1_height_action(self):
-        while True:
-            try:
-                height_action_msg = self.HeightAction_subscriber.Read()
-                if height_action_msg is not None:
-                    self.g1_height_action_array_out[0] = height_action_msg.z  # Height velocity command
-            except Exception as e:
-                print(f"[_subscribe_g1_height_action] Exception: {e}")
-                time.sleep(0.1)
-            time.sleep(0.01)
-    def _subscribe_g1_move_action(self):
-        while True:
-            try:
-                move_action_msg = self.G1MoveAction_subscriber.Read()
-                if move_action_msg is not None:
-                    self.g1_move_action_array_out[0] = move_action_msg.linear.x   # Linear velocity
-                    self.g1_move_action_array_out[1] = move_action_msg.angular.z  # Angular velocity
-            except Exception as e:
-                print(f"[_subscribe_g1_move_action] Exception: {e}")
-                time.sleep(0.1)
-            time.sleep(0.01)
+
     def _subscribe_g1_mobilebase_state(self):
         while True:
             try:
