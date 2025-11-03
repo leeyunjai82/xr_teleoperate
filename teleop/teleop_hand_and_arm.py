@@ -85,7 +85,7 @@ if __name__ == '__main__':
     parser.add_argument('--sim', action = 'store_true', help = 'Enable isaac simulation mode')
     parser.add_argument('--ipc', action = 'store_true', help = 'Enable IPC server to handle input; otherwise enable sshkeyboard')
     parser.add_argument('--pass-through', action='store_true', help='Enable passthrough mode (use real-world view in XR device)')
-    parser.add_argument('--img-server-ip', type=str, default='127.0.0.1', help='IP address of image server')
+    parser.add_argument('--img-server-ip', type=str, default='192.168.123.164', help='IP address of image server')
     parser.add_argument('--affinity', action = 'store_true', help = 'Enable high priority and set CPU affinity mode')
     # record mode and task info
     parser.add_argument('--record', action = 'store_true', help = 'Enable data recording mode')
