@@ -83,8 +83,8 @@ if __name__ == '__main__':
     parser.add_argument('--arm', type=str, choices=['G1_29', 'G1_23', 'H1_2', 'H1'], default='G1_29', help='Select arm controller')
     parser.add_argument('--ee', type=str, choices=['dex1', 'dex3', 'inspire_ftp', 'inspire_dfx', 'brainco'], help='Select end effector controller')
     
-    parser.add_argument('--base-type', type=str, choices=['mobile_lift', 'lift','None'], default='None', help='Select mobile controller')
-    parser.add_argument('--control-device', type=str, choices=['unitree_handle', 'other'], default='unitree_handle', help='Select mobile control device')
+    parser.add_argument('--base-type', type=str, choices=['mobile_lift', 'lift','legs'], default='legs', help='Select lower body type')
+    parser.add_argument('--r3-controller', action = 'store_true', help = 'Enable R3 controller, otherwise enable XR controller')
     parser.add_argument('--use-waist', action = 'store_true', help = 'Enable waist control')
 
     # mode flags
@@ -198,12 +198,12 @@ if __name__ == '__main__':
             pass
 
         # For mobile base and elevation control
-        if args.base_type != "None":
+        if args.base_type != "legs":
             control_data_mapper = ControlDataMapper()
-            mobile_ctrl = G1_Mobile_Lift_Controller(args.base_type, args.control_device, simulation_mode=args.sim)
+            mobile_ctrl = G1_Mobile_Lift_Controller(args.base_type, args.r3_controller, simulation_mode=args.sim)
         else:
             mobile_ctrl=None
-        handle_instruction = HandleInstruction(args.control_device, tv_wrapper, mobile_ctrl)
+        handle_instruction = HandleInstruction(args.r3_controller, tv_wrapper, mobile_ctrl)
         # affinity mode (if you dont know what it is, then you probably don't need it)
         if args.affinity:
             import psutil
@@ -329,7 +329,7 @@ if __name__ == '__main__':
             move_action = [0.0, 0.0]
             waist_state = None
             waist_action = None
-            if args.base_type != "None" and mobile_ctrl != None:
+            if  mobile_ctrl != None:
                 height_state = mobile_ctrl.g1_height_state_array_out
                 handle_instruction_data = handle_instruction.get_instruction()
                 vel_data = control_data_mapper.update(rbutton_A=handle_instruction_data['rbutton_A'], rbutton_B=handle_instruction_data['rbutton_B'])
@@ -488,7 +488,7 @@ if __name__ == '__main__':
                         }, 
                         
                     }
-                    if args.base_type != "None" and mobile_ctrl != None:
+                    if mobile_ctrl != None:
                         # 动态添加 torso 键 (Dynamically add torso key)
                         states["torso"] = {
                             "height": np.array(height_state[0]).tolist(),

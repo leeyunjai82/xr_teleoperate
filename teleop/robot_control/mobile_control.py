@@ -26,13 +26,13 @@ kTopicG1MoveState = "rt/slamware_ros_sdk_server_node/odom"
 kTopicUnitreeHandle = "rt/wirelesscontroller"
 
 class G1_Mobile_Lift_Controller:
-    def __init__(self, base_type,control_type, fps = 30.0, Unit_Test = False, simulation_mode = False, filter_alpha=0.2,):
+    def __init__(self, base_type,r3_controller, fps = 30.0, Unit_Test = False, simulation_mode = False, filter_alpha=0.2,):
         """
         Initialize G1 mobile base and elevation controller
         
         Args:
             base_type: "only_height" for height only, "with_move" for height + movement
-            control_type: "unitree_handle" for Unitree controller, "other" for external device control
+            r3_controller: "true" for R3 controller, "false" for XR controller
             fps: Control frequency
         """
         logger_mp.info("Initialize G1_Mobile_Lift_Controller...")
@@ -46,7 +46,7 @@ class G1_Mobile_Lift_Controller:
         self.Unit_Test = Unit_Test
         self.simulation_mode = simulation_mode
         self.base_type = base_type 
-        self.control_type = control_type
+        self.r3_controller = r3_controller
         # Data reception flags
         self.height_data_received = False
         self.move_data_received = False
@@ -122,7 +122,7 @@ class G1_Mobile_Lift_Controller:
         
         logger_mp.info("[G1_Mobile_Lift_Controller] Subscribe dds ok.")
         # If not using Unitree controller, start control process
-        if self.control_type == "unitree_handle":
+        if self.r3_controller:
             self.unitree_handle_state_array_out = Array('d', 5, lock=True)
             self.UnitreeHandleState_subscriber = ChannelSubscriber(kTopicUnitreeHandle, WirelessController_)
             self.UnitreeHandleState_subscriber.Init()
