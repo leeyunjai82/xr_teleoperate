@@ -36,13 +36,19 @@
 
 # 🔖 [版本说明](CHANGELOG_zh-CN.md)
 
-## 🏷️ v1.3
+## 🏷️ v1.4
 
-- 添加 [![Unitree LOGO](https://camo.githubusercontent.com/ff307b29fe96a9b115434a450bb921c2a17d4aa108460008a88c58a67d68df4e/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f4769744875622d57696b692d3138313731373f6c6f676f3d676974687562)](https://github.com/unitreerobotics/xr_teleoperate/wiki) [![Unitree LOGO](https://camo.githubusercontent.com/6f5253a8776090a1f89fa7815e7543488a9ec200d153827b4bc7c3cb5e1c1555/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f2d446973636f72642d3538363546323f7374796c653d666c6174266c6f676f3d446973636f7264266c6f676f436f6c6f723d7768697465)](https://discord.gg/ZwcVwxv5rq)
+- **图像服务器**变更为 [teleimager](https://github.com/silencht/teleimager)，具体请查看仓库README。
 
-- 支持 **IPC 模式**，默认使用 SSHKeyboard 进行输入控制。  
-- 合并 **H1_2** 机器人新增运动模式支持。  
-- 合并 **G1_23** 机械臂新增运动模式支持。  
+- 升级 [televuer](https://github.com/silencht/televuer)，具体请查看仓库README。
+
+  > 新版本的 [teleimager](https://github.com/silencht/teleimager/commit/ab5018691943433c24af4c9a7f3ea0c9a6fbaf3c) + [televuer](https://github.com/silencht/televuer/releases/tag/v3.0) 支持通过 webrtc 传输头部相机图像
+  >
+  > 支持 pass-through, ego, immersive 三种模式
+
+- 完善系统的**状态机**信息、IPC模式。
+
+- 支持 **inspire_FTP** 灵巧手。
 
 - ···
 
@@ -57,10 +63,11 @@
 以下是系统示意图：
 
 <p align="center">
-  <a href="https://oss-global-cdn.unitree.com/static/54cff8fe11ac4158b9b15a73f0842843_5990x4060.png">
-    <img src="https://oss-global-cdn.unitree.com/static/54cff8fe11ac4158b9b15a73f0842843_5990x4060.png" alt="Watch the Document" style="width: 100%;">
+  <a href="https://oss-global-cdn.unitree.com/static/1804a35aa09a44a9bf9821fafc4a2348_3415x2465.png">
+    <img src="https://oss-global-cdn.unitree.com/static/1804a35aa09a44a9bf9821fafc4a2348_3415x2465.png" alt="Watch the Document" style="width: 100%;">
   </a>
 </p>
+
 
 以下是本仓库目前支持的设备类型：
 
@@ -126,14 +133,59 @@
 (tv) unitree@Host:~$ cd xr_teleoperate
 # 浅克隆子模块
 (tv) unitree@Host:~/xr_teleoperate$ git submodule update --init --depth 1
+```
+
+```bash
+# 安装 teleimager 模块
+(tv) unitree@Host:~/xr_teleoperate$ cd teleop/teleimager
+(tv) unitree@Host:~/xr_teleoperate/teleop/teleimager$ pip install -e . --no-deps
+```
+
+```bash
 # 安装 televuer 模块
 (tv) unitree@Host:~/xr_teleoperate$ cd teleop/televuer
 (tv) unitree@Host:~/xr_teleoperate/teleop/televuer$ pip install -e .
-# 生成 televuer 模块所需的证书文件
+# 为 televuer 模块配置 SSL 证书，以便 XR 设备（如 Pico / Quest / Apple Vision Pro）通过 HTTPS / WebRTC 安全连接
+# 1. 生成证书文件
+# 1.1 如果您使用 pico / quest 等 xr 设备
 (tv) unitree@Host:~/xr_teleoperate/teleop/televuer$ openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout key.pem -out cert.pem
+# 1.2 如果您使用 apple vision pro 设备
+(tv) unitree@Host:~/xr_teleoperate/teleop/televuer$ openssl genrsa -out rootCA.key 2048
+(tv) unitree@Host:~/xr_teleoperate/teleop/televuer$ openssl req -x509 -new -nodes -key rootCA.key -sha256 -days 365 -out rootCA.pem -subj "/CN=xr-teleoperate"
+(tv) unitree@Host:~/xr_teleoperate/teleop/televuer$ openssl genrsa -out key.pem 2048
+(tv) unitree@Host:~/xr_teleoperate/teleop/televuer$ openssl req -new -key key.pem -out server.csr -subj "/CN=localhost"
+  ## 创建 server_ext.cnf 文件，输入以下内容（IP.2 地址应与您的 主机 IP 地址匹配，假设此处地址为 192.168.123.2。可以使用 `ifconfig` 等类似命令查询）
+(tv) unitree@Host:~/xr_teleoperate/teleop/televuer$ vim server_ext.cnf
+subjectAltName = @alt_names
+[alt_names]
+DNS.1 = localhost
+IP.1 = 192.168.123.164
+IP.2 = 192.168.123.2
+(tv) unitree@Host:~/xr_teleoperate/teleop/televuer$ openssl x509 -req -in server.csr -CA rootCA.pem -CAkey rootCA.key -CAcreateserial -out cert.pem -days 365 -sha256 -extfile server_ext.cnf
+(tv) unitree@Host:~/xr_teleoperate/teleop/televuer$ ls
+build  cert.pem  key.pem  LICENSE  pyproject.toml  README.md  rootCA.key  rootCA.pem  rootCA.srl  server.csr  server_ext.cnf  src  test
+# 通过 AirDrop 将 rootCA.pem 复制到 Apple Vision Pro 并安装它
+
+# 开启防火墙
+(tv) unitree@Host:~/xr_teleoperate/teleop/televuer$ sudo ufw allow 8012
+
+# 2. 配置证书路径，以下方式任选其一
+# 2.1 用户配置目录（可选）
+(tv) unitree@Host:~/xr_teleoperate/teleop/televuer$ mkdir -p ~/.config/xr_teleoperate/
+(tv) unitree@Host:~/xr_teleoperate/teleop/televuer$ cp cert.pem key.pem ~/.config/xr_teleoperate/
+# 2.2 环境变量配置（可选）
+(tv) unitree@Host:~/xr_teleoperate/teleop/televuer$ echo 'export XR_TELEOP_CERT="$HOME/xr_teleoperate/teleop/televuer/cert.pem"' >> ~/.bashrc
+(tv) unitree@Host:~/xr_teleoperate/teleop/televuer$ echo 'export XR_TELEOP_KEY="$HOME/xr_teleoperate/teleop/televuer/key.pem"' >> ~/.bashrc
+(tv) unitree@Host:~/xr_teleoperate/teleop/televuer$ source ~/.bashrc
+```
+
+```bash
 # 安装 dex-retargeting 模块
 (tv) unitree@Host:~/xr_teleoperate/teleop/televuer$ cd ../robot_control/dex-retargeting/
 (tv) unitree@Host:~/xr_teleoperate/teleop/robot_control/dex-retargeting$ pip install -e .
+```
+
+```bash
 # 安装本仓库所需的其他依赖库
 (tv) unitree@Host:~/xr_teleoperate/teleop/robot_control/dex-retargeting$ cd ../../../
 (tv) unitree@Host:~/xr_teleoperate$ pip install -r requirements.txt
@@ -168,11 +220,41 @@
 >
 > 您可以参考 [Harley Hahn's Guide to Unix and Linux](https://www.harley.com/unix-book/book/chapters/04.html#H) 和 [Conda User Guide](https://docs.conda.io/projects/conda/en/latest/user-guide/getting-started.html) 来深入了解这些知识。
 
+## 1.3 🚀 启动参数说明
 
+
+- 基础控制参数
+
+|      ⚙️ 参数       |                            📜 说明                            |                         🔘 目前可选值                         |     📌 默认值      |
+| :---------------: | :----------------------------------------------------------: | :----------------------------------------------------------: | :---------------: |
+|   `--frequency`   |                     设置录制和控制的 FPS                     |                    任意正常范围内的浮点数                    |       30.0        |
+|  `--input-mode`   |          选择 XR 输入模式（通过什么方式控制机器人）          |   `hand`（**手势跟踪**）<br />`controller`（**手柄跟踪**）   |      `hand`       |
+| `--display-mode`  |        选择 XR 显示模式（通过什么方式查看机器人视角）        | `immersive`（沉浸式）<br />`ego`（通透+第一人称小窗）<br />`pass-through`（通透） |    `immersive`    |
+|      `--arm`      |            选择机器人设备类型（可参考 0. 📖 介绍）            |          `G1_29`<br />`G1_23`<br />`H1_2`<br />`H1`          |      `G1_29`      |
+|      `--ee`       |       选择手臂的末端执行器设备类型（可参考 0. 📖 介绍）       | `dex1`<br />`dex3`<br />`inspire_ftp`<br />`inspire_dfx`<br />`brainco` |     无默认值      |
+| `--img-server-ip` | 设置图像服务器的 IP 地址，用于接收图像服务流、配置 WebRTC 信令服务地址 |                         `IPv4` 地址                          | `192.168.123.164` |
+
+- 模式开关参数
+
+|    ⚙️ 参数    |                            📜 说明                            |
+| :----------: | :----------------------------------------------------------: |
+|  `--motion`  | 【启用**运动控制**模式】<br />开启本模式后，可在机器人运控程序运行下进行遥操作程序。<br />**手势跟踪**模式下，可使用 [R3遥控器](https://www.unitree.com/cn/R3) 控制机器人正常行走；**手柄跟踪**模式下，也可使用[手柄摇杆控制机器人行走](https://github.com/unitreerobotics/xr_teleoperate/blob/375cdc27605de377c698e2b89cad0e5885724ca6/teleop/teleop_hand_and_arm.py#L247-L257)。 |
+| `--headless` | 【启用**无图形界面**模式】<br />适用于本程序部署在开发计算单元（PC2）等无显示器情况 |
+|   `--sim`    | 【启用[**仿真模式**](https://github.com/unitreerobotics/unitree_sim_isaaclab)】 |
+|   `--ipc`    | 【进程间通信模式】<br />可通过进程间通信来控制 xr_teleoperate 程序的状态切换，此模式适合与代理程序进行交互 |
+| `--affinity` | 【CPU亲和模式】<br />设置 CPU 核心亲和性。如果你不知道这是什么，那么请不要设置它。 |
+|  `--record`  | 【启用**数据录制**模式】<br />按 **r** 键进入遥操后，按 **s** 键可开启数据录制，再次按 **s** 键可结束录制并保存本次 episode 数据。<br />继续按下 **s** 键可重复前述过程。 |
+|  `--task-*`  | 此类参数可配置录制的文件保存路径，任务目标、描述、步骤等信息 |
+
+
+
+------
 
 # 2. 💻 仿真部署
 
 ## 2.1 📥 环境配置
+
+> 因为图像服务升级为`teleimager`，v1.4 版本仿真部署暂未上线，请暂时使用 v1.3 进行测试
 
 首先，请安装 [unitree_sim_isaaclab](https://github.com/unitreerobotics/unitree_sim_isaaclab)。具体安装步骤，可参考该仓库 README 文档。
 
@@ -204,28 +286,7 @@
 
 本程序支持通过 XR 设备（比如手势或手柄）来控制实际机器人动作，也支持在虚拟仿真中运行。你可以根据需要，通过命令行参数来配置运行方式。
 
-以下是本程序的启动参数说明：
-
-- 基础控制参数
-
-|   ⚙️ 参数    |                      📜 说明                      |                       🔘 目前可选值                       | 📌 默认值 |
-| :---------: | :----------------------------------------------: | :------------------------------------------------------: | :------: |
-| `--xr-mode` |    选择 XR 输入模式（通过什么方式控制机器人）    | `hand`（**手势跟踪**）<br />`controller`（**手柄跟踪**） |  `hand`  |
-|   `--arm`   |      选择机器人设备类型（可参考 0. 📖 介绍）      |        `G1_29`<br />`G1_23`<br />`H1_2`<br />`H1`        | `G1_29`  |
-|   `--ee`    | 选择手臂的末端执行器设备类型（可参考 0. 📖 介绍） |    `dex1`<br />`dex3`<br />`inspire1`<br />`brainco`     | 无默认值 |
-
-- 模式开关参数
-
-|    ⚙️ 参数    |                            📜 说明                            |
-| :----------: | :----------------------------------------------------------: |
-|  `--record`  | 【启用**数据录制**模式】<br />按 **r** 键进入遥操后，按 **s** 键可开启数据录制，再次按 **s** 键可结束录制并保存本次 episode 数据。<br />继续按下 **s** 键可重复前述过程。 |
-|  `--motion`  | 【启用**运动控制**模式】<br />开启本模式后，可在机器人运控程序运行下进行遥操作程序。<br />**手势跟踪**模式下，可使用 [R3遥控器](https://www.unitree.com/cn/R3) 控制机器人正常行走；**手柄跟踪**模式下，也可使用[手柄摇杆控制机器人行走](https://github.com/unitreerobotics/xr_teleoperate/blob/375cdc27605de377c698e2b89cad0e5885724ca6/teleop/teleop_hand_and_arm.py#L247-L257)。 |
-| `--headless` | 【启用**无图形界面**模式】<br />适用于本程序部署在开发计算单元（PC2）等无显示器情况 |
-|   `--sim`    | 【启用[**仿真模式**](https://github.com/unitreerobotics/unitree_sim_isaaclab)】 |
-
-------
-
-根据上述参数说明以及仿真环境配置，我们假设选择**手势跟踪**来控制 G1(29 DoF) + Dex3 灵巧手设备，同时开启仿真模式和数据录制模式。
+根据 1.3 节参数说明以及仿真环境配置，我们假设选择**手势跟踪**来控制 G1(29 DoF) + Dex3 灵巧手设备，同时开启仿真模式和数据录制模式。
 
 则启动命令如下所示：
 
@@ -250,7 +311,21 @@
 
 2. 连接对应的 WiFi 热点
 
-3. 打开浏览器应用（比如 Safari 或 PICO Browser），输入并访问网址：https://192.168.123.2:8012?ws=wss://192.168.123.2:8012
+3. 如果您头部相机开启了WebRTC功能（`cam_config_server.yaml => head_camera => enable_webrtc: true`），那么执行此步骤，否则直接跳到第 4 步。打开浏览器应用（比如 Safari 或 PICO Browser），输入并访问网址：https://192.168.123.164:60001
+
+   > 注意1：此 IP 地址为开启teleimager图像服务的 PC2 设备 IP
+
+   > 注意2：此时可能弹出类似第4步相同的警告提示。请点击`Advanced`按钮后，继续点击 `Proceed to ip (unsafe)` 按钮，使用非安全方式继续登录WebRTC图像服务器。进入后，点击左上角`start`按钮，如果预览到头部相机图像，那么操作成功。
+   >
+   > <p align="center">
+   >   <a href="https://oss-global-cdn.unitree.com/static/777f9c6f42d74eb2a6438d1509a73025_2475x1574.jpg">
+   >     <img src="https://oss-global-cdn.unitree.com/static/777f9c6f42d74eb2a6438d1509a73025_2475x1574.jpg" alt="webrtc_unsafe" style="width: 50%;">
+   >   </a>
+   > </p>
+   >
+   > 注意3：此步骤目的有两个：一是检测头部相机服务是否正常；二是手动信任 `webrtc` 自签名证书。相同设备与自签名证书条件下执行一次本步骤后，再次启动时可跳过该步。
+
+4. 打开浏览器应用（比如 Safari 或 PICO Browser），输入并访问网址：https://192.168.123.2:8012/?ws=wss://192.168.123.2:8012
 
    > 注意1：此 IP 地址应与您的 **主机** IP 地址匹配。该地址可以使用 `ifconfig` 等类似命令查询。
 
@@ -262,7 +337,7 @@
      </a>
    </p>
 
-4. 进入`Vuer`网页界面后，点击 **`Virtual Reality`** 按钮。在允许后续的所有对话框后，启动 VR 会话。界面如下图所示：
+5. 进入`Vuer`网页界面后，点击 **`Virtual Reality`** 按钮。在允许后续的所有对话框后，启动 VR 会话。界面如下图所示：
 
    <p align="center">
      <a href="https://oss-global-cdn.unitree.com/static/fdeee4e5197f416290d8fa9ecc0b28e6_2480x1286.png">
@@ -270,7 +345,7 @@
      </a>
    </p>
 
-5. 此时，您将会在 XR 头显设备中看到机器人的第一人称视野。同时，终端打印出链接建立的信息：
+6. 此时，您将会在 XR 头显设备中看到机器人的第一人称视野。同时，终端打印出链接建立的信息：
 
    ```bash
    websocket is connected. id:dbb8537d-a58c-4c57-b49d-cbb91bd25b90
@@ -278,7 +353,7 @@
    Uplink task running. id:dbb8537d-a58c-4c57-b49d-cbb91bd25b90
    ```
 
-6. 然后，将手臂形状摆放到与**机器人初始姿态**相接近的姿势。这一步是为了避免在实物部署时，初始位姿差距过大导致机器人产生过大的摆动。
+7. 然后，将手臂形状摆放到与**机器人初始姿态**相接近的姿势。这一步是为了避免在实物部署时，初始位姿差距过大导致机器人产生过大的摆动。
 
    机器人初始姿态示意图如下：
 
@@ -288,9 +363,9 @@
      </a>
    </p>
 
-7. 最后，在终端中按下 **r** 键后，正式开启遥操作程序。此时，您可以远程控制机器人的手臂（和灵巧手）
+8. 最后，在终端中按下 **r** 键后，正式开启遥操作程序。此时，您可以远程控制机器人的手臂（和灵巧手）
 
-8. 在遥操过程中，按 **s** 键可开启数据录制，再次按 **s** 键可结束录制并保存数据（该过程可重复）
+9. 在遥操过程中，按 **s** 键可开启数据录制，再次按 **s** 键可结束录制并保存数据（该过程可重复）
 
    数据录制过程示意图如下：
 
@@ -303,10 +378,12 @@
 > 注意1：录制的数据默认存储在 `xr_teleoperate/teleop/utils/data` 中。数据使用说明见此仓库： [unitree_IL_lerobot](https://github.com/unitreerobotics/unitree_IL_lerobot/blob/main/README_zh.md#%E6%95%B0%E6%8D%AE%E9%87%87%E9%9B%86%E4%B8%8E%E8%BD%AC%E6%8D%A2)。
 >
 > 注意2：请在录制数据时注意您的硬盘空间大小。
+>
+> 注意3:   v1.4 及以上版本，record image窗口取消。
 
 ## 2.3 🔚 退出
 
-要退出程序，可以在终端窗口（或 'record image' 窗口）中按下 **q** 键。
+要退出程序，可以在终端窗口中按下 **q** 键。
 
 
 
@@ -318,34 +395,44 @@
 
 仿真环境中已经自动开启了图像服务。实物部署时，需要针对自身相机硬件类型，手动开启图像服务。步骤如下：
 
-将 `xr_teleoperate/teleop/image_server` 目录中的 `image_server.py` 复制到宇树机器人（G1/H1/H1_2 等）的 **开发计算单元 PC2**。
+1. 在宇树机器人（G1/H1/H1_2 等）的 **开发计算单元 PC2** 中安装图像服务程序
 
 ```bash
-# 提醒：可以通过scp命令将image_server.py传输到PC2，然后使用ssh远程登录PC2后执行它。
-# 假设开发计算单元PC2的ip地址为192.168.123.164，那么传输过程示例如下：
-# 先ssh登录PC2，创建图像服务器的文件夹
-(tv) unitree@Host:~$ ssh unitree@192.168.123.164 "mkdir -p ~/image_server"
-# 将本地的image_server.py拷贝至PC2的~/image_server目录下
-(tv) unitree@Host:~$ scp ~/xr_teleoperate/teleop/image_server/image_server.py unitree@192.168.123.164:~/image_server/
+# ssh登录PC2，下载图像服务程序仓库
+(base) unitree@PC2:~$ cd ~
+(base) unitree@PC2:~$ git clone https://github.com/silencht/teleimager
+# 根据 teleimager 仓库的 https://github.com/silencht/teleimager/blob/main/README.md 文档说明来配置环境
 ```
 
-并在 **PC2** 上执行以下命令：
+2. 在**本地主机**上执行以下命令：
 
 ```bash
-# 提醒：目前该图像传输程序支持OpenCV和Realsense SDK两种读取图像的方式，请阅读image_server.py的ImageServer类的注释以便您根据自己的相机硬件来配置自己的图像传输服务。
-# 现在位于宇树机器人 PC2 终端
-unitree@PC2:~/image_server$ python image_server.py
-# 您可以看到终端输出如下：
-# {'fps': 30, 'head_camera_type': 'opencv', 'head_camera_image_shape': [480, 1280], 'head_camera_id_numbers': [0]}
-# [Image Server] Head camera 0 resolution: 480.0 x 1280.0
-# [Image Server] Image server has started, waiting for client connections...
+# 将本地主机 xr_teleoperate/teleop/televuer 路径下在 1.1 节配置的 key.pem 和 cert.pem 文件拷贝到 PC2 对应路径
+# 这两个文件是 teleimager 启动 WebRTC 服务时所必须的
+(tv) unitree@Host:~$ scp ~/xr_teleoperate/teleop/televuer/key.pem ~/xr_teleoperate/teleop/televuer/cert.pem unitree@192.168.123.164:~/teleimager
+# 根据 teleimager 仓库的 https://github.com/silencht/teleimager/blob/main/README.md 文档说明，在PC2配置证书路径，例如
+(teleimager) unitree@PC2:~$ cd teleimager
+(teleimager) unitree@PC2:~$ mkdir -p ~/.config/xr_teleoperate/
+(teleimager) unitree@PC2:~/teleimager$ cp cert.pem key.pem ~/.config/xr_teleoperate/
 ```
 
-在图像服务启动后，您可以在 **主机** 终端上使用 `image_client.py` 测试通信是否成功：
+3. 在**开发计算单元 PC2** 中按照 teleimager 文档配置 cam_config_server.yaml 并启动图像服务程序
 
 ```bash
-(tv) unitree@Host:~/xr_teleoperate/teleop/image_server$ python image_client.py
+(teleimager) unitree@PC2:~/image_server$ python -m teleimager.image_server
+# 下面命令作用相同
+(teleimager) unitree@PC2:~/image_server$ teleimager-server
 ```
+
+4. 在**本地主机**上执行以下命令订阅图像：
+
+```bash
+(tv) unitree@Host:~$ cd ~/xr_teleoperate/teleop/teleimager/src
+(tv) unitree@Host:~/xr_teleoperate/teleop/teleimager/src$ python -m teleimager.image_client --host 192.168.123.164
+# 如果设置了 WebRTC 图像流，那么可以在浏览器中通过 https://192.168.123.164:60001 打开网址，随后点击 Start 按钮进行测试 
+```
+
+
 
 ## 3.2 ✋ Inspire 手部服务（可选）
 
@@ -353,7 +440,7 @@ unitree@PC2:~/image_server$ python image_server.py
 >
 > 注意2：如果选择的G1机器人配置，且使用 [Inspire DFX 灵巧手](https://support.unitree.com/home/zh/G1_developer/inspire_dfx_dexterous_hand)，相关issue [#46](https://github.com/unitreerobotics/xr_teleoperate/issues/46)。
 >
-> 注意3：如果选择的机器人配置中使用了 [Inspire FTP 灵巧手](https://support.unitree.com/home/zh/G1_developer/inspire_ftp_dexterity_hand)，相关issue [ #48](https://github.com/unitreerobotics/xr_teleoperate/issues/48)。
+> 注意3：如果选择的机器人配置中使用了 [Inspire FTP 灵巧手](https://support.unitree.com/home/zh/G1_developer/inspire_ftp_dexterity_hand)，相关issue [ #48](https://github.com/unitreerobotics/xr_teleoperate/issues/48)。目前已经支持 FTP 灵巧手，请您查阅 `--ee` 参数。 
 
 首先，使用 [此链接: DFX_inspire_service](https://github.com/unitreerobotics/DFX_inspire_service) 克隆灵巧手控制接口程序，然后将其复制到宇树机器人的**PC2**。
 
@@ -396,8 +483,7 @@ sudo ./brainco_hand --id 127 --serial /dev/ttyUSB2
 >
 >  1. 所有人员必须与机器人保持安全距离，以防止任何潜在的危险！
 >  2. 在运行此程序之前，请确保至少阅读一次 [官方文档](https://support.unitree.com/home/zh/Teleoperation)。
->  3. 没有开启**运动控制**模式（`--motion`）时，请务必确保机器人已经进入 [调试模式（L2+R2）](https://support.unitree.com/home/zh/G1_developer/remote_control)，以停止运动控制程序发送指令，这样可以避免潜在的指令冲突问题。
->  4. 如果要开启**运动控制**模式遥操作，请提前使用 [R3遥控器](https://www.unitree.com/cn/R3) 确保机器人进入主运控模式。
+>  3. 如果要开启**运动控制**模式遥操作，请提前使用 [R3遥控器](https://www.unitree.com/cn/R3) 确保机器人进入主运控模式。
 >  5. 开启**运动控制**模式（`--motion`）时：
 >     - 右手柄按键 `A` 为遥操作**退出**功能按键；
 >     - 左手柄和右手柄的两个摇杆按键同时按下为软急停按键，机器人会退出运控程序并进入阻尼模式，该功能只在必要情况下使用
@@ -427,12 +513,8 @@ xr_teleoperate/
 │
 ├── assets                    [存储机器人 URDF 相关文件]
 │
-├── hardware                  [存储 3D 打印模组]
-│
 ├── teleop
-│   ├── image_server
-│   │     ├── image_client.py      [用于从机器人图像服务器接收图像数据]
-│   │     ├── image_server.py      [从摄像头捕获图像并通过网络发送（在机器人板载计算单元PC2上运行）]
+│   ├── teleimager            [全新的图像服务库，支持多种特性]
 │   │
 │   ├── televuer
 │   │      ├── src/televuer
@@ -454,6 +536,9 @@ xr_teleoperate/
 │   │      ├── episode_writer.py          [用于记录模仿学习的数据]  
 │   │      ├── weighted_moving_filter.py  [用于过滤关节数据的滤波器]
 │   │      ├── rerun_visualizer.py        [用于可视化录制数据]
+│   │      ├── ipc.py                     [用于和代理程序进行进程间通信]
+│   │      ├── motion_switcher.py         [用于切换运控状态]
+│   │      ├── sim_state_topic.py         [用于仿真部署]
 │   │
 │   │──teleop_hand_and_arm.py    [遥操作的启动执行代码]
 ```
@@ -477,3 +562,4 @@ xr_teleoperate/
 7. https://github.com/zeromq/pyzmq
 8. https://github.com/Dingry/BunnyVisionPro
 9. https://github.com/unitreerobotics/unitree_sdk2_python
+10. https://github.com/ARCLab-MIT/beavr-bot
